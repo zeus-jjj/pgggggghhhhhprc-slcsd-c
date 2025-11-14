@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Заявка не найдена</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.4.1/semantic.min.css">
+    <style>
+        body {
+            background-color: #2A2A32;
+            color: #FFFFFF;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        .ui.container {
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="ui container">
+        <h2>Заявка с ID {{ lead_id }} не найдена в базе данных телеграм бота.</h2>
+        <p>Это означает, что заявка была создана не через телеграм-бота, и, соответственно, данные для этой заявки не хранятся на нашем сервере.</p>
+        <p>Вести переписку отсюда можно только с пользователями, которые создали заявку из телеграм бота!</p>
+    </div>
+</body>
+</html>

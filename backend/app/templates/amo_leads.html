@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AMO Leads</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.4.1/semantic.min.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.4.1/semantic.min.js"></script>
+    <style>
+        body {
+            background-color: #2A2A32;
+            color: #FFFFFF;
+        }
+        .ui.selection.dropdown {
+            min-width: 200px;
+        }
+        .ui.selection.dropdown .text {
+            min-width: 200px;
+        }
+        .ui.container {
+            margin-top: 20px;
+        }
+        #filter-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        #filters {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+        .ui.form .field > label {
+            color: #FFFFFF;
+        }
+        .ui.table thead {
+            color: #FFFFFF;
+        }
+        .ui.table tbody tr {
+            cursor: pointer;
+        }
+        .ui.table tbody tr:hover {
+            background-color: #DEDEDE;
+        }
+        .ui.modal {
+            height: 90%;
+            width: 90%;
+        }
+        .ui.modal .content {
+            height: 100%;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        #modal-iframe {
+            flex: 1;
+        }
+        .ui.dropdown .menu {
+            width: 200px;
+        }
+    </style>
+</head>
+<body>
+    <div class="ui container">
+        <div class="ui form">
+            <div id="filters">
+                <!-- Категория статуса -->
+                <div class="field">
+                    <label for="status-category">Категория статуса</label>
+                    <div class="ui fluid search selection dropdown" id="status-category-dropdown">
+                        <input type="hidden" id="status-category">
+                        <i class="dropdown icon"></i>
+                        <div class="default text"></div>
+                        <div class="menu">
+                            <div class="item" data-value="work">В работе</div>
+                            <div class="item" data-value="closed">Закрыт</div>
+                            <div class="item" data-value="unknown">Неизвестные</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Статус -->
+                <div class="field">
+                    <label for="status">Статус</label>
+                    <div class="ui fluid multiple search selection dropdown" id="status-dropdown">
+                        <input type="hidden" id="status">
+                        <i class="dropdown icon"></i>
+                        <div class="default text"></div>
+                        <div class="menu" id="status-options">
+                            <!-- Options will be appended here by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Дата начала -->
+                <div class="field">
+                    <label for="start_date">Начальная дата</label>
+                    <input type="date" id="start_date">
+                </div>
+                
+                <!-- Дата окончания -->
+                <div class="field">
+                    <label for="end_date">Конечная дата</label>
+                    <input type="date" id="end_date">
+                </div>
+            </div>
+
+            <!-- Кнопка фильтрации -->
+            <div id="filter-container">
+                <button class="ui button" id="filter">Применить фильтр</button>
+            </div>
+        </div>
+
+        <!-- Таблица заявок -->
+        <table class="ui celled table">
+            <thead>
+                <tr>
+                    <th>ID заявки</th>
+                    <th>ТГ-ID юзера</th>
+                    <th>Статус заявки</th>
+                    <th>Дата создания</th>
+                </tr>
+            </thead>
+            <tbody id="leads-table">
+                <!-- Rows will be appended here by JavaScript -->
+            </tbody>
+        </table>
+    </div>
+
+    <div class="ui modal" id="modal">
+        <i class="close icon"></i>
+        <div class="content">
+            <iframe id="modal-iframe" width="100%" height="100%" frameborder="0"></iframe>
+        </div>
+    </div>
+
+
+    <script>
+        $(document).ready(function() {
+            const key = "{{ key }}";
+            const domain = "{{ domain }}";
+            const statusMapping = {{ status_mapping|tojson }}; // Получаем словарь статус -> название
+            const combinedStatusDict = {
+                ...statusMapping.active,
+                ...statusMapping.closed
+            };
+
+            const workStatuses = Object.keys(statusMapping.active).map(Number);
+            const closedStatuses = Object.keys(statusMapping.closed).map(Number);
+
+            let isUserScrolling = false;
+            let currentCategory = 'work'; // Текущая выбранная категория
+
+            function fillTable(data) {
+                const tableBody = $('#leads-table');
+                tableBody.empty();
+
+                data.forEach(function(lead) {
+                    const statusName = combinedStatusDict[lead.status] || lead.status;
+                    const row = `<tr data-lead-id="${lead.lead_id}">
+                        <td>${lead.lead_id}</td>
+                        <td>${lead.user_id}</td>
+                        <td>${statusName}</td>
+                        <td>${lead.created_at}</td>
+                    </tr>`;
+                    tableBody.append(row);
+                });
+
+                $('#leads-table tr').click(function() {
+                    const leadId = $(this).data('lead-id');
+                    const iframeUrl = `${domain}/api/amo_leads/dialog?lead_id=${leadId}&key=${key}`;
+                    $('#modal-iframe').attr('src', iframeUrl);
+                    $('#modal').modal({
+                        dimmerSettings: { opacity: 0 }
+                    }).modal('show');
+                });
+            }
+
+            function updateStatusDropdown(uniqueStatuses) {
+                const statusOptions = $('#status-options');
+                statusOptions.empty();
+
+                uniqueStatuses.forEach(function(status) {
+                    const statusName = combinedStatusDict[status] || status;
+                    const option = `<div class="item" data-value="${status}">${statusName}</div>`;
+                    statusOptions.append(option);
+                });
+
+                $('#status-dropdown').css('width', 'auto');
+                $('#status-dropdown').dropdown('clear');
+                $('#status-dropdown').dropdown();
+            }
+
+            function fetchLeadsAndUpdateTableAndDropdown(category) {
+                currentCategory = category;
+                let statusFilter;
+                let inverse = false;
+                if (category === 'work') {
+                    statusFilter = workStatuses;
+                } else if (category === 'closed') {
+                    statusFilter = closedStatuses;
+                } else if (category === 'unknown') {
+                    statusFilter = workStatuses.concat(closedStatuses);
+                    inverse = true;
+                } else {
+                    statusFilter = [];
+                }
+
+                $.get('/api/amo_leads/get_leads', {
+                    key: key,
+                    'status[]': statusFilter,
+                    category: category,
+                    inverse: inverse ? 'true' : 'false'
+                }, function(data) {
+                    fillTable(data);
+
+                    const uniqueStatuses = [...new Set(data.map(lead => lead.status))];
+                    updateStatusDropdown(uniqueStatuses);
+                });
+            }
+
+           function fetchLeads() {
+                let status = $('#status-dropdown').dropdown('get value').split(',');
+                let inverse = false;
+                if (status.length === 1 && status[0] === "") {
+                    status = [];
+                }
+
+                let statusFilter;
+                if (status.length > 0) {
+                    statusFilter = status;
+                } else {
+                    if (currentCategory === 'work') {
+                        statusFilter = workStatuses;
+                    } else if (currentCategory === 'closed') {
+                        statusFilter = closedStatuses;
+                    } else if (currentCategory === 'unknown') {
+                        statusFilter = Object.keys(combinedStatusDict).map(Number);
+                        inverse = true;
+                    } else {
+                        statusFilter = [];
+                    }
+                }
+
+                const start_date = $('#start_date').val();
+                const end_date = $('#end_date').val();
+
+                $.get('/api/amo_leads/get_leads', {
+                    key: key,
+                    'status[]': statusFilter,
+                    start_date: start_date,
+                    end_date: end_date,
+                    category: currentCategory,
+                    inverse: inverse ? 'true' : 'false'
+                }, function(data) {
+                    fillTable(data);
+                });
+            }
+
+            $('#leads-table').on('scroll', function() {
+                const tableBody = $(this);
+                isUserScrolling = tableBody.scrollTop() + tableBody.innerHeight() < tableBody.prop("scrollHeight");
+            });
+
+            $('#filter').click(function() {
+                fetchLeads();
+            });
+
+            $('#status-category-dropdown').dropdown({
+                onChange: function(value) {
+                    fetchLeadsAndUpdateTableAndDropdown(value);
+                }
+            });
+
+            $('#status-category-dropdown').dropdown('set selected', 'work');
+                fetchLeadsAndUpdateTableAndDropdown('work');
+
+            setInterval(fetchLeads, 5000);
+        });
+    </script>
+
+</body>
+</html>

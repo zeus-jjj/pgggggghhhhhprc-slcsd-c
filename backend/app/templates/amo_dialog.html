@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AMO Dialog</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.4.1/semantic.min.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.4.1/semantic.min.js"></script>
+    <style>
+        body {
+            background-color: #2A2A32;
+            color: #FFFFFF;
+        }
+        .ui.container {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 90vh;
+        }
+        .messages {
+            flex: 1;
+            overflow-y: scroll;
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #1F1F24;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+        }
+        .message {
+            padding: 10px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            max-width: 80%;
+            word-wrap: break-word;
+            white-space: normal;
+            color: #000000;
+        }
+        .message.user {
+            background-color: #D3D3D3;
+            align-self: flex-start;
+        }
+        .message.bot {
+            background-color: #90EE90;
+            align-self: flex-end;
+        }
+        .timestamp {
+            display: block;
+            font-size: 0.8em;
+            color: #888;
+            text-align: right;
+        }
+        .ui.form {
+            display: flex;
+            gap: 10px;
+        }
+        .ui.form textarea {
+            flex: 1;
+        }
+        .notification {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            border-radius: 5px;
+            color: #fff;
+            z-index: 1000;
+            display: none;
+        }
+        .notification.success {
+            background-color: #28a745;
+        }
+        .notification.error {
+            background-color: #dc3545;
+        }
+        .info-icon {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            cursor: pointer;
+        }
+
+        .info-content {
+            display: none;
+            position: absolute;
+            right: 50px;
+            top: 20px;
+            background-color: #FFFFFF;
+            color: #000000;
+            padding: 10px;
+            border-radius: 5px;
+            width: 200px;
+            opacity: 0;
+            transition: opacity 0.5s, visibility 0.5s;
+        }
+
+        .info-icon:hover .info-content,
+        .info-icon .info-content:hover {
+            display: block;
+            opacity: 1;
+            visibility: visible;
+        }
+        .info-icon .info-content {
+            display: block;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.5s, visibility 0.5s;
+        }
+        .file-input-wrapper {
+            margin-bottom: 10px;
+        }
+        .file-input-wrapper input[type="file"] {
+            position: relative;
+            width: 100%;
+        }
+        .progress-container {
+            width: 100%;
+            background-color: #f3f3f3;
+            border-radius: 25px;
+            margin: 10px 0;
+            height: 30px;
+            position: relative;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0;
+            background-color: #21ba45;
+            border-radius: 25px;
+            display: flex;
+            align-items: center;
+            transition: width 0.5s;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            white-space: nowrap;
+            overflow: hidden;
+            padding: 0 10px;
+            cursor: pointer;
+        }
+
+        .disk-space-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: -30px;
+            position: relative;
+        }
+    </style>
+</head>
+<body>
+    <div class="ui container">
+        <div style="text-align: center;">
+            Диалог с пользователем. <a href="https://firestormteam.amocrm.ru/leads/detail/{{ lead_id }}" target="_blank" style="color: #00b5ad;">Перейти к заявке в АМО</a>
+            <div class="info-icon">
+                <i class="question circle icon"></i>
+                <div class="info-content" id="info-content">
+                    <!-- Информация будет загружена сюда -->
+                </div>
+            </div>
+        </div>
+        <div class="messages" id="messages"></div>
+        <div class="file-input-wrapper">
+            <input class="ui button" type="file" id="file-input" multiple>
+        </div>
+        <div class="ui form">
+            <textarea rows="2" id="message-input"></textarea>
+            <button class="ui button" id="send-button">Отправить</button>
+        </div>
+        <div class="disk-space-usage">
+            <div class="progress-container">
+                <div class="progress-bar" id="progress-bar">0 GB used / 0 GB free</div>
+            </div>
+            
+        </div>
+    </div>
+    <div class="notification success" id="success-notification">Сообщение успешно доставлено</div>
+    <div class="notification error" id="error-notification">Ошибка отправки сообщения</div>
+    <div class="ui modal" id="sending-modal">
+        <div class="header">Отправка сообщения</div>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            const leadId = "{{ lead_id }}";
+            const key = "{{ key }}";
+            const domain = "{{ domain }}";
+            let isUserScrolling = false;
+
+            function fetchDiskSpace() {
+                $.get(`${domain}/api/amo_leads/disk_space`, { key: key }, function(data) {
+                    if (data.error) {
+                        alert("Ошибка: " + data.error);
+                        return;
+                    }
+                    const usedGB = (data.used / (1024 ** 3)).toFixed(2);
+                    const freeGB = (data.free / (1024 ** 3)).toFixed(2);
+                    const totalGB = (data.total / (1024 ** 3)).toFixed(2);
+                    const usedPercent = data.used_percent.toFixed(2);
+                    $('#progress-bar').css('width', `${usedPercent}%`);
+                    $('#progress-bar').text(`${usedGB} ГБ использовано / ${freeGB} ГБ свободно`);
+                });
+            }
+
+
+            $('#progress-bar').click(fetchDiskSpace);
+
+            fetchDiskSpace();
+
+            function showNotification(type, message) {
+                const notification = $(`#${type}-notification`);
+                notification.text(message).fadeIn();
+
+                setTimeout(() => {
+                    notification.fadeOut();
+                }, 3000);
+            }
+
+            function fetchMessages() {
+                const messagesDiv = $('#messages');
+                const previousScrollTop = messagesDiv.scrollTop();
+                const previousScrollHeight = messagesDiv.prop("scrollHeight");
+
+                $.get(`${domain}/api/amo_leads/get_messages`, {
+                    lead_id: leadId,
+                    key: key
+                }, function(data) {
+                    messagesDiv.empty();
+
+                    data.forEach(function(message) {
+                        const messageClass = message.is_user ? 'user' : 'bot';
+                        const trimmedMessage = message.msg.trim().replace(/\n/g, '<br>');
+                        const timestamp = new Date(message.timestamp).toLocaleString();
+                        const messageElement = `<div class="message ${messageClass}">
+                            ${trimmedMessage}
+                            <span class="timestamp">${timestamp}</span>
+                        </div>`;
+                        messagesDiv.append(messageElement);
+                    });
+
+                    if (!isUserScrolling) {
+                        messagesDiv.scrollTop(messagesDiv.prop("scrollHeight"));
+                    } else {
+                        messagesDiv.scrollTop(previousScrollTop + (messagesDiv.prop("scrollHeight") - previousScrollHeight));
+                    }
+                });
+            }
+
+            function fetchLeadData() {
+                $.get(`${domain}/api/amo_leads/get_lead_data`, {
+                    lead_id: leadId,
+                    key: key
+                }, function(data) {
+                    const infoContent = $('#info-content');
+                    infoContent.empty();
+                    for (const [field, value] of Object.entries(data)) {
+                        const infoElement = `<div><strong>${field}:</strong> ${value}</div>`;
+                        infoContent.append(infoElement);
+                    }
+                });
+            }
+
+            $('#messages').on('scroll', function() {
+                const messagesDiv = $(this);
+                isUserScrolling = messagesDiv.scrollTop() + messagesDiv.innerHeight() < messagesDiv.prop("scrollHeight");
+            });
+
+            $('#send-button').click(function() {
+                const messageInput = $('#message-input');
+                const message = messageInput.val().trim();
+                const files = $('#file-input')[0].files;
+
+                // Проверка размера файлов
+                let totalSize = 0;
+                for (let i = 0; i < files.length; i++) {
+                    totalSize += files[i].size;
+                    if (files[i].size > 100 * 1024 * 1024) { // ограничение в 100 MB
+                        showNotification('error', `Файл "${files[i].name}" превышает размер 100 MB`);
+                        return;
+                    }
+                }
+
+                if (message === "" && files.length === 0) {
+                    showNotification('error', 'Введите текст сообщения либо прикрепите файл!');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('lead_id', leadId);
+                formData.append('key', key);
+                formData.append('message', message);
+                formData.append('is_user', false);
+
+                for (let i = 0; i < files.length; i++) {
+                    formData.append('files', files[i]);
+                }
+
+                $('#sending-modal').modal('show');
+
+                $.ajax({
+                    url: `${domain}/api/amo_leads/send_message`,
+                    type: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function(response) {
+                        $('#sending-modal').modal('hide');
+                        if (response.success) {
+                            showNotification('success', 'Сообщение успешно доставлено');
+                            fetchMessages();
+                            messageInput.val("");
+                            $('#file-input').val("");
+                        } else {
+                            $('#sending-modal').modal('hide');
+                            showNotification('error', 'Не удалось доставить сообщение. Ошибка: ' + response.error);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        $('#sending-modal').modal('hide');
+                        let errorMessage = xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : `Ошибка: ${xhr.status} ${xhr.statusText}`;
+                        showNotification('error', `Не удалось доставить сообщение. Ошибка: ${errorMessage}`);
+                    }
+                });
+            });
+
+            // Fetch initial messages
+            fetchMessages();
+
+            // Fetch lead data
+            fetchLeadData();
+
+            // Periodically fetch new messages
+            setInterval(fetchMessages, 2500);
+        });
+    </script>
+</body>
+</html>

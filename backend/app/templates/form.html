@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Отправить форму</title>
+
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="icon" href="{{ url_for('static',filename='favicon.ico')}}"/>
+    <link href="https://getbootstrap.com/docs/5.2/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-rbsA2VBKQhggwzxH7pPCaAqO46MgnOM80zW1RWuH61DGLwZJEdK2Kadq2F9CUG65" crossorigin="anonymous">
+    <script src="{{url_for('static', filename='js/index.js')}}"></script>
+</head>
+<body>
+<div class="container-lg mt-5 " style="height: 130vh">
+    <h1 class=' mb-5 text-center' style="font-size: 2.5vh"></h1>
+    <div id="alert" class="alert" role="alert" style="display: none">
+        <h1 id="h1_title"></h1>
+    </div>
+    <form class="mx-auto" style="font-size: 2vh"  onsubmit="handleForm();return false">
+
+    </form>
+
+</div>
+</body>
+</html>
