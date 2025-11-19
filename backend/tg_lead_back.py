@@ -1,9 +1,9 @@
 import threading
-# 
+#
 from waitress import serve # WSGI-сервер для windows
-from os import getenv
 from dotenv import load_dotenv
-# 
+import os
+#
 from app import socketio, app
 
 load_dotenv()

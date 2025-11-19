@@ -1,7 +1,7 @@
-waitress==3.0.0
-flask==2.3.2
+waitress
+flask
 flask_cors
 flask_socketio
 cryptography
-psycopg2==2.9.6
-python-dotenv==1.0.0
+psycopg2-binary
+python-dotenv

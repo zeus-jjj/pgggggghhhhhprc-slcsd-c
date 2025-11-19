@@ -1,0 +1,1368 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FSM Редактор Воронок - Miro Style</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leader-line@1.0.5/leader-line.min.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #f5f7fa;
+            color: #1a202c;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        /* ===== LAYOUT ===== */
+        #app-container {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* ===== SIDEBAR ===== */
+        #sidebar {
+            width: 80px;
+            background: #ffffff;
+            border-right: 1px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px 0;
+            gap: 12px;
+        }
+
+        .sidebar-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            background: #f7fafc;
+            border: 2px solid #e2e8f0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            transition: all 0.2s;
+        }
+
+        .sidebar-btn:hover {
+            background: #3b82f6;
+            border-color: #3b82f6;
+            transform: scale(1.1);
+        }
+
+        .sidebar-btn.active {
+            background: #3b82f6;
+            border-color: #3b82f6;
+        }
+
+        .sidebar-divider {
+            width: 40px;
+            height: 1px;
+            background: #e2e8f0;
+            margin: 8px 0;
+        }
+
+        /* ===== TOOLBAR ===== */
+        #toolbar {
+            background: #ffffff;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .toolbar-left {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .toolbar-right {
+            display: flex;
+            gap: 8px;
+        }
+
+        .tool-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .tool-btn:hover {
+            background: #e5e7eb;
+        }
+
+        .tool-btn.active {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+
+        #bot-selector {
+            padding: 8px 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            background: white;
+            cursor: pointer;
+            min-width: 200px;
+        }
+
+        /* ===== CANVAS ===== */
+        #editor-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #f9fafb;
+        }
+
+        #canvas-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: #ffffff;
+            background-image:
+                radial-gradient(circle, #e5e7eb 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        #canvas {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+        }
+
+        #canvas.panning {
+            cursor: grabbing;
+        }
+
+        #canvas.drawing {
+            cursor: crosshair;
+        }
+
+        /* ===== BLOCKS ===== */
+        .block {
+            position: absolute;
+            background: white;
+            border: 2px solid #e5e7eb;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            cursor: move;
+            transition: box-shadow 0.2s;
+            user-select: none;
+        }
+
+        .block:hover {
+            box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+            z-index: 10;
+        }
+
+        .block.selected {
+            border-color: #3b82f6;
+            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);
+            z-index: 100;
+        }
+
+        .block.dragging {
+            cursor: grabbing;
+            opacity: 0.8;
+            z-index: 1000;
+        }
+
+        /* Start Block - Circle */
+        .block.start-block {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border-color: #10b981;
+            background: linear-gradient(135deg, #ecfdf5 0%, #ffffff 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 20px;
+            font-weight: 600;
+            font-size: 14px;
+            color: #059669;
+        }
+
+        /* Message Block - Rectangle */
+        .block.message-block {
+            min-width: 200px;
+            max-width: 300px;
+            border-radius: 12px;
+            border-color: #3b82f6;
+        }
+
+        .block-header {
+            padding: 12px 16px;
+            background: #3b82f6;
+            color: white;
+            border-radius: 10px 10px 0 0;
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .block-content {
+            padding: 16px;
+        }
+
+        .block-text {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 13px;
+            min-height: 60px;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        .block-text:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+
+        /* Button in Message Block - Oval */
+        .message-button {
+            background: #f0f9ff;
+            border: 2px solid #3b82f6;
+            border-radius: 20px;
+            padding: 8px 16px;
+            margin: 8px 0;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: relative;
+        }
+
+        .message-button input {
+            border: none;
+            background: transparent;
+            flex: 1;
+            font-size: 13px;
+            outline: none;
+        }
+
+        .button-delete {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #fee2e2;
+            border: none;
+            color: #ef4444;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 8px;
+        }
+
+        .add-button-btn {
+            width: 100%;
+            padding: 8px;
+            background: #f3f4f6;
+            border: 1px dashed #9ca3af;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #4b5563;
+            margin-top: 8px;
+        }
+
+        .add-button-btn:hover {
+            background: #e5e7eb;
+        }
+
+        /* Condition Block - Diamond */
+        .block.condition-block {
+            width: 180px;
+            height: 180px;
+            background: #fef3c7;
+            border-color: #fbbf24;
+            transform: rotate(45deg);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .block.condition-block .condition-inner {
+            transform: rotate(-45deg);
+            width: 120px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .condition-inner input,
+        .condition-inner select {
+            width: 100%;
+            padding: 4px 8px;
+            border: 1px solid #fbbf24;
+            border-radius: 4px;
+            font-size: 11px;
+            margin: 4px 0;
+            background: white;
+        }
+
+        /* Action Block - Rounded Rectangle */
+        .block.action-block {
+            min-width: 180px;
+            max-width: 250px;
+            border-radius: 20px;
+            border-color: #8b5cf6;
+        }
+
+        .block.action-block .block-header {
+            background: #8b5cf6;
+            border-radius: 18px 18px 0 0;
+        }
+
+        /* Connection Ports */
+        .port {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            background: white;
+            border: 3px solid #3b82f6;
+            border-radius: 50%;
+            cursor: crosshair;
+            z-index: 20;
+            transition: all 0.2s;
+        }
+
+        .port:hover {
+            transform: scale(1.5);
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+        }
+
+        .port.port-start {
+            border-color: #10b981;
+        }
+
+        .port.port-true {
+            border-color: #10b981;
+        }
+
+        .port.port-false {
+            border-color: #ef4444;
+        }
+
+        .port.active {
+            background: #3b82f6;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+            50% { box-shadow: 0 0 0 8px rgba(59, 130, 246, 0); }
+        }
+
+        /* Temporary line while drawing */
+        #temp-line {
+            position: absolute;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #374151;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        /* Delete button on block */
+        .block-delete {
+            background: #fee2e2;
+            color: #ef4444;
+            border: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        .block-delete:hover {
+            background: #ef4444;
+            color: white;
+        }
+
+        /* Zoom controls */
+        #zoom-controls {
+            position: absolute;
+            bottom: 24px;
+            right: 24px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            z-index: 1000;
+        }
+
+        .zoom-btn {
+            width: 40px;
+            height: 40px;
+            border: none;
+            background: white;
+            cursor: pointer;
+            font-size: 18px;
+            color: #4b5563;
+        }
+
+        .zoom-btn:hover {
+            background: #f3f4f6;
+        }
+
+        .zoom-btn:not(:last-child) {
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .zoom-level {
+            padding: 8px;
+            font-size: 11px;
+            text-align: center;
+            color: #6b7280;
+            font-weight: 600;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        /* Context Menu */
+        #context-menu {
+            position: absolute;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            padding: 8px 0;
+            min-width: 180px;
+            z-index: 2000;
+            display: none;
+        }
+
+        .context-menu-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .context-menu-item:hover {
+            background: #f3f4f6;
+        }
+
+        .context-menu-divider {
+            height: 1px;
+            background: #e5e7eb;
+            margin: 4px 0;
+        }
+
+        /* Modal */
+        #modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 3000;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 6px;
+        }
+
+        .form-input, .form-select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .form-input:focus, .form-select:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 20px;
+        }
+
+        .modal-buttons .btn {
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="app-container">
+        <!-- ===== SIDEBAR ===== -->
+        <div id="sidebar">
+            <button class="sidebar-btn" onclick="setTool('select')" data-tool="select" title="Выбрать (V)">
+                ☝️
+            </button>
+            <button class="sidebar-btn" onclick="setTool('pan')" data-tool="pan" title="Панорама (H)">
+                ✋
+            </button>
+
+            <div class="sidebar-divider"></div>
+
+            <button class="sidebar-btn" onclick="addBlockFromSidebar('start')" title="Старт">
+                🟢
+            </button>
+            <button class="sidebar-btn" onclick="addBlockFromSidebar('message')" title="Сообщение">
+                💬
+            </button>
+            <button class="sidebar-btn" onclick="addBlockFromSidebar('condition')" title="Условие">
+                💎
+            </button>
+            <button class="sidebar-btn" onclick="addBlockFromSidebar('action')" title="Действие">
+                ⚙️
+            </button>
+
+            <div class="sidebar-divider"></div>
+
+            <button class="sidebar-btn" onclick="deleteSelected()" title="Удалить (Del)">
+                🗑️
+            </button>
+        </div>
+
+        <!-- ===== MAIN EDITOR ===== -->
+        <div id="editor-area">
+            <!-- Toolbar -->
+            <div id="toolbar">
+                <div class="toolbar-left">
+                    <select id="bot-selector" onchange="switchBot(this.value)">
+                        <option value="">Выберите бота...</option>
+                    </select>
+                    <button class="tool-btn" onclick="openBotModal()">
+                        ➕ Новый бот
+                    </button>
+                </div>
+
+                <div class="toolbar-right">
+                    <button class="tool-btn" onclick="saveCurrentBot()">
+                        💾 Сохранить
+                    </button>
+                    <button class="tool-btn" onclick="exportJSON()">
+                        📤 Экспорт
+                    </button>
+                </div>
+            </div>
+
+            <!-- Canvas -->
+            <div id="canvas-container">
+                <div id="canvas">
+                    <!-- Blocks will be added here -->
+                </div>
+
+                <!-- Temp line for drawing -->
+                <svg id="temp-line" width="100%" height="100%">
+                    <line id="temp-line-element" x1="0" y1="0" x2="0" y2="0"
+                          stroke="#3b82f6" stroke-width="2" stroke-dasharray="5,5" />
+                </svg>
+
+                <!-- Zoom Controls -->
+                <div id="zoom-controls">
+                    <button class="zoom-btn" onclick="zoomIn()">➕</button>
+                    <div class="zoom-level" id="zoom-level">100%</div>
+                    <button class="zoom-btn" onclick="zoomOut()">➖</button>
+                    <button class="zoom-btn" onclick="resetZoom()">⟲</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div id="context-menu">
+        <div class="context-menu-item" onclick="contextAddBlock('message')">💬 Добавить сообщение</div>
+        <div class="context-menu-item" onclick="contextAddBlock('condition')">💎 Добавить условие</div>
+        <div class="context-menu-item" onclick="contextAddBlock('action')">⚙️ Добавить действие</div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" onclick="deleteSelected()">🗑️ Удалить выбранное</div>
+    </div>
+
+    <!-- Modal for Bot Management -->
+    <div id="modal">
+        <div class="modal-content">
+            <div class="modal-header">Добавить нового бота</div>
+            <div class="form-group">
+                <label class="form-label">Имя бота</label>
+                <input type="text" id="modal-bot-name" class="form-input" placeholder="@MyBot">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Токен бота</label>
+                <input type="text" id="modal-bot-token" class="form-input" placeholder="1234567890:ABC...">
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="closeModal()">Отмена</button>
+                <button class="btn btn-primary" onclick="createBot()">Создать</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===== TELEGRAM INITIALIZATION =====
+        let tg = {
+            ready: () => {},
+            expand: () => {},
+            MainButton: { setText: () => {}, onClick: () => {}, show: () => {}, hide: () => {} },
+            sendData: (data) => {
+                console.log('📤 TG sendData:', data);
+                alert('JSON готов:\n\n' + data.substring(0, 150) + '...');
+            }
+        };
+
+        try {
+            if (window.Telegram && window.Telegram.WebApp) {
+                tg = window.Telegram.WebApp;
+                tg.ready();
+                tg.expand();
+            }
+        } catch (e) {
+            console.warn('Telegram WebApp not available');
+        }
+
+        // ===== STATE =====
+        let allBots = {}; // { token: { name, blocks: [], connections: [] } }
+        let currentBotToken = null;
+        let selectedBlock = null;
+        let currentTool = 'select';
+        let zoom = 1;
+        let panOffset = { x: 0, y: 0 };
+        let isPanning = false;
+        let isDragging = false;
+        let isDrawingConnection = false;
+        let dragStart = { x: 0, y: 0 };
+        let connectionStart = null;
+        let lines = [];
+        let blockIdCounter = 1;
+
+        const canvas = document.getElementById('canvas');
+        const canvasContainer = document.getElementById('canvas-container');
+        const contextMenu = document.getElementById('context-menu');
+        const modal = document.getElementById('modal');
+        const tempLine = document.getElementById('temp-line-element');
+        const botSelector = document.getElementById('bot-selector');
+
+        // ===== DATA MANAGEMENT =====
+        function loadData() {
+            const data = localStorage.getItem('fsmEditorMiro');
+            if (data) {
+                try {
+                    allBots = JSON.parse(data);
+                    console.log('✅ Loaded:', Object.keys(allBots).length, 'bots');
+                } catch (e) {
+                    console.error('Error loading data:', e);
+                    allBots = {};
+                }
+            }
+
+            if (Object.keys(allBots).length === 0) {
+                createDemoBot();
+            }
+        }
+
+        function saveData() {
+            localStorage.setItem('fsmEditorMiro', JSON.stringify(allBots));
+            console.log('💾 Saved');
+        }
+
+        function createDemoBot() {
+            const token = 'demo:' + Date.now();
+            allBots[token] = {
+                name: '@DemoBot',
+                blocks: [
+                    {
+                        id: 'start_1',
+                        type: 'start',
+                        x: 200,
+                        y: 100,
+                        content: { text: 'START' }
+                    },
+                    {
+                        id: 'msg_1',
+                        type: 'message',
+                        x: 200,
+                        y: 280,
+                        content: {
+                            text: 'Привет! Выбери действие:',
+                            buttons: [
+                                { id: 'btn_1', text: 'Информация' },
+                                { id: 'btn_2', text: 'Помощь' }
+                            ]
+                        }
+                    }
+                ],
+                connections: [
+                    { from: 'start_1', to: 'msg_1', fromPort: 'bottom', toPort: 'top' }
+                ]
+            };
+            currentBotToken = token;
+            saveData();
+        }
+
+        // ===== BOT MANAGEMENT =====
+        function updateBotSelector() {
+            botSelector.innerHTML = '<option value="">Выберите бота...</option>';
+            for (const token in allBots) {
+                const opt = document.createElement('option');
+                opt.value = token;
+                opt.textContent = allBots[token].name;
+                opt.selected = token === currentBotToken;
+                botSelector.appendChild(opt);
+            }
+        }
+
+        function switchBot(token) {
+            if (!token) return;
+            currentBotToken = token;
+            renderCanvas();
+        }
+
+        function openBotModal() {
+            modal.style.display = 'flex';
+            document.getElementById('modal-bot-name').value = '';
+            document.getElementById('modal-bot-token').value = '';
+        }
+
+        function closeModal() {
+            modal.style.display = 'none';
+        }
+
+        function createBot() {
+            const name = document.getElementById('modal-bot-name').value.trim();
+            const token = document.getElementById('modal-bot-token').value.trim();
+
+            if (!name || !token) {
+                alert('Заполните все поля');
+                return;
+            }
+
+            if (allBots[token]) {
+                alert('Бот с таким токеном уже существует');
+                return;
+            }
+
+            allBots[token] = {
+                name: name,
+                blocks: [
+                    {
+                        id: 'start_' + blockIdCounter++,
+                        type: 'start',
+                        x: 200,
+                        y: 100,
+                        content: { text: 'START' }
+                    }
+                ],
+                connections: []
+            };
+
+            currentBotToken = token;
+            saveData();
+            updateBotSelector();
+            closeModal();
+            renderCanvas();
+        }
+
+        // ===== TOOL MANAGEMENT =====
+        function setTool(tool) {
+            currentTool = tool;
+            canvas.className = tool === 'pan' ? 'panning' : '';
+
+            document.querySelectorAll('.sidebar-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            const btn = document.querySelector(`[data-tool="${tool}"]`);
+            if (btn) btn.classList.add('active');
+        }
+
+        // ===== CANVAS RENDERING =====
+        function renderCanvas() {
+            if (!currentBotToken) return;
+
+            // Clear
+            lines.forEach(line => {
+                try { line.remove(); } catch (e) {}
+            });
+            lines = [];
+            canvas.innerHTML = '';
+
+            const bot = allBots[currentBotToken];
+
+            // Render blocks
+            bot.blocks.forEach(block => {
+                renderBlock(block);
+            });
+
+            // Render connections
+            setTimeout(() => {
+                bot.connections.forEach(conn => {
+                    renderConnection(conn);
+                });
+            }, 100);
+
+            updateBotSelector();
+        }
+
+        function renderBlock(block) {
+            const blockEl = document.createElement('div');
+            blockEl.className = `block ${block.type}-block`;
+            blockEl.dataset.blockId = block.id;
+            blockEl.style.left = block.x + 'px';
+            blockEl.style.top = block.y + 'px';
+
+            switch (block.type) {
+                case 'start':
+                    blockEl.innerHTML = `
+                        <div>START</div>
+                        <div class="port" data-port="bottom" style="bottom: -7px; left: 50%; transform: translateX(-50%);"></div>
+                    `;
+                    break;
+
+                case 'message':
+                    blockEl.innerHTML = `
+                        <div class="port" data-port="top" style="top: -7px; left: 50%; transform: translateX(-50%);"></div>
+                        <div class="block-header">
+                            <span>💬 ${block.id}</span>
+                            <button class="block-delete" onclick="deleteBlock('${block.id}')">✕</button>
+                        </div>
+                        <div class="block-content">
+                            <textarea class="block-text" oninput="updateBlockText('${block.id}', this.value)"
+                                      placeholder="Текст сообщения...">${block.content.text || ''}</textarea>
+                            <div id="buttons-${block.id}">
+                                ${(block.content.buttons || []).map((btn, idx) => `
+                                    <div class="message-button">
+                                        <input type="text" value="${btn.text}"
+                                               oninput="updateButtonText('${block.id}', ${idx}, this.value)"
+                                               placeholder="Текст кнопки">
+                                        <div class="port" data-port="btn-${idx}"
+                                             style="position: absolute; right: -10px; top: 50%; transform: translateY(-50%);"></div>
+                                        <button class="button-delete" onclick="deleteButton('${block.id}', ${idx})">✕</button>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <button class="add-button-btn" onclick="addButton('${block.id}')">➕ Кнопка</button>
+                        </div>
+                    `;
+                    break;
+
+                case 'condition':
+                    blockEl.innerHTML = `
+                        <div class="port port-true" data-port="right" style="right: -7px; top: 50%; transform: translateY(-50%) rotate(-45deg);"></div>
+                        <div class="port port-false" data-port="bottom" style="bottom: -7px; left: 50%; transform: translateX(-50%) rotate(-45deg);"></div>
+                        <div class="port" data-port="top" style="top: -7px; left: 50%; transform: translateX(-50%) rotate(-45deg);"></div>
+                        <div class="condition-inner">
+                            <div style="font-weight: 600; margin-bottom: 8px;">🔀 Условие</div>
+                            <input type="text" value="${block.content.variable || ''}"
+                                   oninput="updateCondition('${block.id}', 'variable', this.value)"
+                                   placeholder="переменная">
+                            <select onchange="updateCondition('${block.id}', 'operator', this.value)">
+                                ${['==', '!=', '>', '<', '>=', '<=', 'contains'].map(op =>
+                                    `<option value="${op}" ${block.content.operator === op ? 'selected' : ''}>${op}</option>`
+                                ).join('')}
+                            </select>
+                            <input type="text" value="${block.content.value || ''}"
+                                   oninput="updateCondition('${block.id}', 'value', this.value)"
+                                   placeholder="значение">
+                            <button class="block-delete" onclick="deleteBlock('${block.id}')"
+                                    style="margin-top: 8px; width: 100%;">Удалить</button>
+                        </div>
+                    `;
+                    break;
+
+                case 'action':
+                    blockEl.innerHTML = `
+                        <div class="port" data-port="top" style="top: -7px; left: 50%; transform: translateX(-50%);"></div>
+                        <div class="port" data-port="bottom" style="bottom: -7px; left: 50%; transform: translateX(-50%);"></div>
+                        <div class="block-header">
+                            <span>⚙️ ${block.id}</span>
+                            <button class="block-delete" onclick="deleteBlock('${block.id}')">✕</button>
+                        </div>
+                        <div class="block-content">
+                            <input type="text" class="form-input" value="${block.content.action_type || ''}"
+                                   oninput="updateAction('${block.id}', 'action_type', this.value)"
+                                   placeholder="Тип действия" style="margin-bottom: 8px;">
+                            <textarea class="block-text" style="min-height: 40px;"
+                                      oninput="updateAction('${block.id}', 'params', this.value)"
+                                      placeholder='{"key": "value"}'>${block.content.params || ''}</textarea>
+                        </div>
+                    `;
+                    break;
+            }
+
+            canvas.appendChild(blockEl);
+            setupBlockEvents(blockEl);
+        }
+
+        function renderConnection(conn) {
+            const fromBlock = canvas.querySelector(`[data-block-id="${conn.from}"]`);
+            const toBlock = canvas.querySelector(`[data-block-id="${conn.to}"]`);
+
+            if (!fromBlock || !toBlock) return;
+
+            const fromPort = fromBlock.querySelector(`[data-port="${conn.fromPort}"]`);
+            const toPort = toBlock.querySelector(`[data-port="${conn.toPort}"]`);
+
+            if (!fromPort || !toPort || typeof LeaderLine === 'undefined') return;
+
+            try {
+                const line = new LeaderLine(fromPort, toPort, {
+                    color: conn.fromPort.includes('true') || conn.fromPort === 'right' ? '#10b981' :
+                           conn.fromPort.includes('false') ? '#ef4444' : '#3b82f6',
+                    size: 2,
+                    path: 'grid',
+                    endPlug: 'arrow1'
+                });
+                lines.push(line);
+            } catch (e) {
+                console.error('Error rendering connection:', e);
+            }
+        }
+
+        // ===== BLOCK EVENTS =====
+        function setupBlockEvents(blockEl) {
+            const blockId = blockEl.dataset.blockId;
+
+            blockEl.addEventListener('mousedown', (e) => {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' ||
+                    e.target.tagName === 'SELECT' || e.target.tagName === 'BUTTON') {
+                    return;
+                }
+
+                if (currentTool === 'select') {
+                    selectBlock(blockId);
+                    isDragging = true;
+                    const rect = blockEl.getBoundingClientRect();
+                    const canvasRect = canvas.getBoundingClientRect();
+                    dragStart = {
+                        x: e.clientX - (rect.left - canvasRect.left - panOffset.x),
+                        y: e.clientY - (rect.top - canvasRect.top - panOffset.y)
+                    };
+                    blockEl.classList.add('dragging');
+                }
+            });
+
+            // Port click for connection drawing
+            blockEl.querySelectorAll('.port').forEach(port => {
+                port.addEventListener('mousedown', (e) => {
+                    e.stopPropagation();
+                    startDrawingConnection(blockId, port.dataset.port, e);
+                });
+            });
+        }
+
+        function selectBlock(blockId) {
+            document.querySelectorAll('.block').forEach(b => b.classList.remove('selected'));
+            const block = canvas.querySelector(`[data-block-id="${blockId}"]`);
+            if (block) {
+                block.classList.add('selected');
+                selectedBlock = blockId;
+            }
+        }
+
+        // ===== CONNECTION DRAWING =====
+        function startDrawingConnection(blockId, portId, e) {
+            isDrawingConnection = true;
+            connectionStart = { blockId, portId };
+
+            const port = canvas.querySelector(`[data-block-id="${blockId}"] [data-port="${portId}"]`);
+            if (port) port.classList.add('active');
+
+            document.getElementById('temp-line').style.display = 'block';
+            updateTempLine(e);
+        }
+
+        function updateTempLine(e) {
+            if (!isDrawingConnection || !connectionStart) return;
+
+            const port = canvas.querySelector(`[data-block-id="${connectionStart.blockId}"] [data-port="${connectionStart.portId}"]`);
+            if (!port) return;
+
+            const rect = port.getBoundingClientRect();
+            const containerRect = canvasContainer.getBoundingClientRect();
+
+            tempLine.setAttribute('x1', rect.left + rect.width/2 - containerRect.left);
+            tempLine.setAttribute('y1', rect.top + rect.height/2 - containerRect.top);
+            tempLine.setAttribute('x2', e.clientX - containerRect.left);
+            tempLine.setAttribute('y2', e.clientY - containerRect.top);
+        }
+
+        function finishDrawingConnection(toBlockId, toPort) {
+            if (!connectionStart) return;
+
+            if (connectionStart.blockId !== toBlockId) {
+                const bot = allBots[currentBotToken];
+                bot.connections.push({
+                    from: connectionStart.blockId,
+                    to: toBlockId,
+                    fromPort: connectionStart.portId,
+                    toPort: toPort
+                });
+                saveData();
+                renderCanvas();
+            }
+
+            cancelDrawingConnection();
+        }
+
+        function cancelDrawingConnection() {
+            isDrawingConnection = false;
+            if (connectionStart) {
+                const port = canvas.querySelector(`[data-block-id="${connectionStart.blockId}"] [data-port="${connectionStart.portId}"]`);
+                if (port) port.classList.remove('active');
+            }
+            connectionStart = null;
+            document.getElementById('temp-line').style.display = 'none';
+        }
+
+        // ===== MOUSE EVENTS =====
+        canvasContainer.addEventListener('mousedown', (e) => {
+            if (e.target === canvasContainer || e.target === canvas) {
+                if (currentTool === 'pan' || e.button === 1) {
+                    isPanning = true;
+                    dragStart = { x: e.clientX - panOffset.x, y: e.clientY - panOffset.y };
+                    canvas.style.cursor = 'grabbing';
+                }
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (isPanning) {
+                panOffset.x = e.clientX - dragStart.x;
+                panOffset.y = e.clientY - dragStart.y;
+                canvas.style.transform = `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`;
+            } else if (isDragging && selectedBlock) {
+                const blockEl = canvas.querySelector(`[data-block-id="${selectedBlock}"]`);
+                if (blockEl) {
+                    const newX = (e.clientX - dragStart.x) / zoom;
+                    const newY = (e.clientY - dragStart.y) / zoom;
+                    blockEl.style.left = newX + 'px';
+                    blockEl.style.top = newY + 'px';
+
+                    // Update block position in data
+                    const bot = allBots[currentBotToken];
+                    const block = bot.blocks.find(b => b.id === selectedBlock);
+                    if (block) {
+                        block.x = newX;
+                        block.y = newY;
+                    }
+
+                    // Update lines
+                    lines.forEach(line => {
+                        try { line.position(); } catch (e) {}
+                    });
+                }
+            } else if (isDrawingConnection) {
+                updateTempLine(e);
+            }
+        });
+
+        document.addEventListener('mouseup', (e) => {
+            if (isDragging) {
+                const blockEl = canvas.querySelector(`[data-block-id="${selectedBlock}"]`);
+                if (blockEl) blockEl.classList.remove('dragging');
+                saveData();
+            }
+
+            if (isDrawingConnection) {
+                // Check if we're over a port
+                const targetPort = document.elementFromPoint(e.clientX, e.clientY);
+                if (targetPort && targetPort.classList.contains('port')) {
+                    const targetBlock = targetPort.closest('.block');
+                    if (targetBlock) {
+                        finishDrawingConnection(targetBlock.dataset.blockId, targetPort.dataset.port);
+                    } else {
+                        cancelDrawingConnection();
+                    }
+                } else {
+                    cancelDrawingConnection();
+                }
+            }
+
+            isPanning = false;
+            isDragging = false;
+            canvas.style.cursor = currentTool === 'pan' ? 'grab' : '';
+        });
+
+        // Context menu
+        canvasContainer.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            contextMenu.style.left = e.clientX + 'px';
+            contextMenu.style.top = e.clientY + 'px';
+            contextMenu.style.display = 'block';
+        });
+
+        document.addEventListener('click', () => {
+            contextMenu.style.display = 'none';
+        });
+
+        // ===== BLOCK OPERATIONS =====
+        window.addBlockFromSidebar = (type) => {
+            if (!currentBotToken) {
+                alert('Сначала выберите или создайте бота');
+                return;
+            }
+
+            const bot = allBots[currentBotToken];
+            const newBlock = {
+                id: type + '_' + blockIdCounter++,
+                type: type,
+                x: 200 - panOffset.x,
+                y: 200 - panOffset.y,
+                content: {}
+            };
+
+            if (type === 'message') {
+                newBlock.content = { text: '', buttons: [] };
+            } else if (type === 'condition') {
+                newBlock.content = { variable: '', operator: '==', value: '' };
+            } else if (type === 'action') {
+                newBlock.content = { action_type: '', params: '' };
+            } else if (type === 'start') {
+                newBlock.content = { text: 'START' };
+            }
+
+            bot.blocks.push(newBlock);
+            saveData();
+            renderCanvas();
+        };
+
+        window.contextAddBlock = (type) => {
+            addBlockFromSidebar(type);
+        };
+
+        window.deleteBlock = (blockId) => {
+            if (!confirm('Удалить этот блок?')) return;
+
+            const bot = allBots[currentBotToken];
+            bot.blocks = bot.blocks.filter(b => b.id !== blockId);
+            bot.connections = bot.connections.filter(c => c.from !== blockId && c.to !== blockId);
+
+            saveData();
+            renderCanvas();
+        };
+
+        window.deleteSelected = () => {
+            if (selectedBlock) {
+                deleteBlock(selectedBlock);
+                selectedBlock = null;
+            }
+        };
+
+        // ===== UPDATE FUNCTIONS =====
+        window.updateBlockText = (blockId, text) => {
+            const bot = allBots[currentBotToken];
+            const block = bot.blocks.find(b => b.id === blockId);
+            if (block) {
+                block.content.text = text;
+                saveData();
+            }
+        };
+
+        window.addButton = (blockId) => {
+            const bot = allBots[currentBotToken];
+            const block = bot.blocks.find(b => b.id === blockId);
+            if (block) {
+                if (!block.content.buttons) block.content.buttons = [];
+                block.content.buttons.push({ id: 'btn_' + Date.now(), text: '' });
+                saveData();
+                renderCanvas();
+            }
+        };
+
+        window.updateButtonText = (blockId, index, text) => {
+            const bot = allBots[currentBotToken];
+            const block = bot.blocks.find(b => b.id === blockId);
+            if (block && block.content.buttons[index]) {
+                block.content.buttons[index].text = text;
+                saveData();
+            }
+        };
+
+        window.deleteButton = (blockId, index) => {
+            const bot = allBots[currentBotToken];
+            const block = bot.blocks.find(b => b.id === blockId);
+            if (block) {
+                block.content.buttons.splice(index, 1);
+                saveData();
+                renderCanvas();
+            }
+        };
+
+        window.updateCondition = (blockId, key, value) => {
+            const bot = allBots[currentBotToken];
+            const block = bot.blocks.find(b => b.id === blockId);
+            if (block) {
+                block.content[key] = value;
+                saveData();
+            }
+        };
+
+        window.updateAction = (blockId, key, value) => {
+            const bot = allBots[currentBotToken];
+            const block = bot.blocks.find(b => b.id === blockId);
+            if (block) {
+                block.content[key] = value;
+                saveData();
+            }
+        };
+
+        // ===== ZOOM =====
+        window.zoomIn = () => {
+            zoom = Math.min(zoom + 0.1, 2);
+            updateZoom();
+        };
+
+        window.zoomOut = () => {
+            zoom = Math.max(zoom - 0.1, 0.5);
+            updateZoom();
+        };
+
+        window.resetZoom = () => {
+            zoom = 1;
+            panOffset = { x: 0, y: 0 };
+            updateZoom();
+        };
+
+        function updateZoom() {
+            canvas.style.transform = `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`;
+            document.getElementById('zoom-level').textContent = Math.round(zoom * 100) + '%';
+            lines.forEach(line => {
+                try { line.position(); } catch (e) {}
+            });
+        }
+
+        // ===== EXPORT =====
+        window.saveCurrentBot = () => {
+            if (!currentBotToken) return;
+            const bot = allBots[currentBotToken];
+            console.log('Saving bot:', bot);
+            tg.sendData(JSON.stringify({ bot_token: currentBotToken, ...bot }));
+        };
+
+        window.exportJSON = () => {
+            if (!currentBotToken) return;
+            const bot = allBots[currentBotToken];
+            const data = { bot_token: currentBotToken, ...bot };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${bot.name}_funnel.json`;
+            a.click();
+        };
+
+        // ===== KEYBOARD SHORTCUTS =====
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                if (document.activeElement.tagName !== 'INPUT' &&
+                    document.activeElement.tagName !== 'TEXTAREA') {
+                    deleteSelected();
+                }
+            } else if (e.key === 'v' || e.key === 'V') {
+                setTool('select');
+            } else if (e.key === 'h' || e.key === 'H') {
+                setTool('pan');
+            } else if (e.key === 'Escape') {
+                if (isDrawingConnection) {
+                    cancelDrawingConnection();
+                }
+            }
+        });
+
+        // ===== INITIALIZATION =====
+        console.log('🚀 Initializing Miro-style FSM Editor...');
+        loadData();
+        renderCanvas();
+        setTool('select');
+        console.log('✅ Ready!');
+    </script>
+</body>
+</html>
